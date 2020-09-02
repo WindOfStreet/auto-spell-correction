@@ -3,10 +3,8 @@ import re
 import sys
 from collections import Counter
 
-import numpy as np
 import pandas as pd
 import pinyin
-
 from twogram import TwoGrams
 from edit_distance import EditDistance
 
@@ -14,7 +12,7 @@ from edit_distance import EditDistance
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR + '\SentenceGeneration')
 sys.path.append((BASE_DIR + '\edit_distance'))
-print('base dir is:{}'.format(BASE_DIR))
+# print('base dir is:{}'.format(BASE_DIR))
 
 '''
 这样写就是不行...
@@ -75,12 +73,47 @@ class Correct:
                     candidate.append(token)
         return candidate
 
-    def correct(self, string):
-        seg = self.lm.jieba._lcut_for_search(string)
-        suggest = []
+    def __process_single_char(self, string):
+        """
+        对列表中的单独的字母进行处理：与前面合并/与后面合并/删除
+        :param seg: list of tokens
+        :return: new list of tokens without single character
+        """
+        seg = self.lm.jieba.lcut(string)
         seg.insert(0, 'BOS')
         seg.append('EOS')
         for i in range(1, len(seg) - 1, 1):
+            if len(seg[i]) == 1:
+                if seg[i - 1] not in model.lm.wfreq:
+                    # 前一个词不在字典中，则与前一个词合并
+                    tmp = seg[i - 1] + seg[i]
+                    seg.remove(seg[i - 1])
+                    seg.remove(seg[i])
+                    seg.insert(i - 1, tmp)
+                elif seg[i + 1] not in model.lm.wfreq:
+                    # 后一个词不在字典中，则与后一个词合并
+                    tmp = seg[i] + seg[i + 1]
+                    seg.remove(seg[i])
+                    seg.remove(seg[i])
+                    print('after remove:{}'.format(seg))
+                    seg.insert(i, tmp)
+                else:
+                    # 前后词都在字典中，删除此字符
+                    print('{}删除'.format(seg[i]))
+                    seg.remove(seg[i])
+        return seg
+
+    def correct(self, string):
+        """
+        对输入的字符串拼音进行校正
+        :param string: 待校正的字符串
+        :return: 校正后的字符串
+        """
+        # 字符串预处理，获得分词列表
+        seg = self.__process_single_char(string)
+        # 处理各个分词
+        suggest = []
+        for i in range(1, len(seg)-1, 1):
             if seg[i] in self.lm.wfreq:
                 suggest.append(seg[i])
             else:
@@ -100,5 +133,5 @@ class Correct:
 if __name__ == '__main__':
     model = Correct()
     model.preprocess('input/article_9k.txt', 'input/pinyin.dict')
-    string = 'xaomi'
+    string = 'zhngguo'
     print('{}==>{}'.format(string, model.correct(string)))
